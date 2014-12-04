@@ -1,17 +1,20 @@
 ## Set working directory to PUAD Project
-
-## import data, mark blanks to NA, and set column names 
+ 
 ## manually enter which year dataset to import
-eda <- read.csv("eda/eda2012.csv", na.strings = c("", NA))
-names(eda) <- c("state", "project", "grantee", "location", "program", "funds")
-eda <- eda[ , 1:6]
-library(stringr)
-
-## manually set year
 year <- 2012
 
-## turn off scientific notation
+## turn off scientific notation and call stringr library
 options(scipen=999)
+library(stringr)
+
+## import data, mark blanks to NA, and set column names
+setwd("eda")
+files <- list.files()
+file.name <- grep(year, files, value = TRUE)
+file.name
+eda <- read.csv(filename, na.strings = c("", NA))
+names(eda) <- c("state", "project", "grantee", "location", "program", "funds")
+eda <- eda[ , 1:6]
 
 ## remove blank rows
 eda[rowSums(is.na(eda)) == ncol(eda), ]
@@ -71,7 +74,9 @@ eda$funds <- as.numeric(eda$funds)
 ## import counties dataset
 ## import 1841 US counties from ppc campaign generator website (once cleaned in R)
 ## website is  http://ppccampaigngenerator.com/wp-content/uploads/2012/09/List-of-Cities-States-and-Counties.xlsx
-counties <- read.csv("counties/counties.csv")
+setwd("../")
+setwd("counties")
+counties <- read.csv("counties.csv")
 counties <- counties[counties$State != "PR" & counties$State != "GU" & counties$State != "AS" & counties$State 
                      != "MH" & counties$State != "VI" & counties$State != "AE" & counties$State != "AA" & 
                              counties$State != "AP" & counties$State != "PW" & counties$State != "FM" & 
@@ -90,7 +95,9 @@ counties <- counties[-dup.index, ]
 
 ## add counties to eda dataframe
 ## may lose eda observations for PR, VI, or other non-US states
-abb <- read.csv("state_abbreviations/state_abbreviations.csv")
+setwd("../")
+setwd("state_abbreviations")
+abb <- read.csv("state_abbreviations.csv")
 names(abb) <- c("state", "abb")
 abb$state <- tolower(abb$state)
 eda.x <- merge(eda, abb, by = "state")
@@ -134,6 +141,9 @@ eda.y <- find.county(eda.x)
 index <- which(eda.y$merged.city.state == "dover?foxcroft ME")
 eda.y$county[index] <- "piscataquis" 
 
+index <- which(eda.y$merged.city.state == "st. joseph MO")
+eda.y$county[index] <- "buchanan" 
+
 index <- which(eda.y$merged.city.state == "midwest city OK")
 eda.y$county[index] <- "oklahoma" 
 
@@ -142,7 +152,9 @@ eda.y$merged.county.state <- paste(eda.y$county, eda.y$abb, sep = " ")
 
 ## add fips codes for state and county
 ## fips includes AS, GU, MP, PR, UM, and VI
-fips <- read.csv("fips.codes/fips.codes.txt")
+setwd("../")
+setwd("fips.codes")
+fips <- read.csv("fips.codes.txt")
 fips <- fips[ , -5]
 
 ## function to create fips$county and then ultimately fips3$merged.county.state
@@ -178,6 +190,11 @@ for(i in 1:length(names.eda)){
 }
 
 ## import bls data for given year
+## raw bls files are pre-cleaned by filtering for "All Covered" in Ownership column K, 
+## un-hiding columns A-E, copy/pasting columns A-R to a .csv, 
+## and multiplying state and county columns (B & C) by 1 to remove leading zeroes
+## raw data is in bls folder for reference
+setwd("../")
 setwd("bls")
 
 files <- list.files()
@@ -474,7 +491,7 @@ cast.bea.2013$bea.income <- as.numeric(cast.bea.2013$bea.income) * 1000
 ## merge eda.4 and cast.bea.year
 
 cast.year <- paste("cast.bea.", year, sep = "")
-eda.4 <- merge(eda.4, cast.year, id.var = "fips.state.county")
+eda.4 <- merge(eda.4, get(cast.year), id.var = "fips.state.county")
 eda.5 <- eda.4
 
 ## convert bea.population and bea.per.cap.inc from character to numeric
@@ -628,7 +645,7 @@ eda.7$blsu.nat.ue.rate <- nat.ue$blsu.nat.ue.rate[which(nat.ue$blsu.year == year
 
 ## assign df a "df.year" name and set aside for later rbind
 ## e.g. "df.2012"
-assign(paste("df.", year, sep = ""), eda.6)
+assign(paste("df.", year, sep = ""), eda.7)
 
 
 ## need to get county populations and calculate per cap income
