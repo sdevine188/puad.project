@@ -12,7 +12,7 @@ setwd("eda")
 files <- list.files()
 file.name <- grep(year, files, value = TRUE)
 file.name
-eda <- read.csv(filename, na.strings = c("", NA))
+eda <- read.csv(file.name, na.strings = c("", NA))
 names(eda) <- c("state", "project", "grantee", "location", "program", "funds")
 eda <- eda[ , 1:6]
 
@@ -129,23 +129,23 @@ eda.y <- find.county(eda.x)
 ## manually add any counties for city/county combos not found in counties
 
 ## 2013
-##index <- which(eda.y$merged.city.state == "winston-salem NC")
-##eda.y$county[index] <- "forsyth" 
+index <- which(eda.y$merged.city.state == "winston-salem NC")
+eda.y$county[index] <- "forsyth" 
 
-##index <- which(eda.y$merged.city.state == "bayview TX")
-##eda.y$county[index] <- "cameron" 
+index <- which(eda.y$merged.city.state == "bayview TX")
+eda.y$county[index] <- "cameron" 
 
 ## 2012
 ## college park, GA is multi-county (fulton and clayton)
 
-index <- which(eda.y$merged.city.state == "dover?foxcroft ME")
-eda.y$county[index] <- "piscataquis" 
+##index <- which(eda.y$merged.city.state == "dover?foxcroft ME")
+##eda.y$county[index] <- "piscataquis" 
 
-index <- which(eda.y$merged.city.state == "st. joseph MO")
-eda.y$county[index] <- "buchanan" 
+##index <- which(eda.y$merged.city.state == "st. joseph MO")
+##eda.y$county[index] <- "buchanan" 
 
-index <- which(eda.y$merged.city.state == "midwest city OK")
-eda.y$county[index] <- "oklahoma" 
+##index <- which(eda.y$merged.city.state == "midwest city OK")
+##eda.y$county[index] <- "oklahoma" 
 
 ## create merged.county.state variable
 eda.y$merged.county.state <- paste(eda.y$county, eda.y$abb, sep = " ")
@@ -188,171 +188,11 @@ for(i in 1:length(names.eda)){
         new.name <- paste("eda.", names.eda[i], sep = "")
         names(eda.z)[i] <- new.name
 }
+names(eda.z)[which(names(eda.z) == "eda.fips.state.county")] <- "fips.state.county"
 
-## import bls data for given year
-## raw bls files are pre-cleaned by filtering for "All Covered" in Ownership column K, 
-## un-hiding columns A-E, copy/pasting columns A-R to a .csv, 
-## and multiplying state and county columns (B & C) by 1 to remove leading zeroes
-## raw data is in bls folder for reference
-setwd("../")
-setwd("bls")
-
-files <- list.files()
-file.name <- grep(year, files, value = TRUE)
-file.name
-bls <- read.csv(file.name)
-
-## clean data by removing excess columns and naming columns
-bls.1 <- bls[ , -1]
-rownames(bls.1) <- NULL
-bls.1 <- bls.1[ , -c(3:6)]
-bls.1 <- bls.1[ , -c(6:8)]
-bls.1 <- bls.1[ , -c(9:12)]
-names(bls.1) <- c("bls.state.fips", "bls.county.fips", "bls.type", "bls.state", "bls.area", "bls.estab", "bls.emp", 
-                  "bls.wages")
-
-## remove national row, State total rows, and county = 999 rows, leaving only county rows
-bls.1 <- bls.1[-1, ]
-bls.1 <- subset(bls.1, bls.1$bls.type == "County")
-bls.1 <- subset(bls.1, bls.1$bls.county.fips != 999)
-
-## create fips.state.county variable for merging with eda dataset
-bls.1$fips.state.county <- paste(bls.1$bls.state.fips, bls.1$bls.county.fips, sep = ".")
-
-## create bls.county variable for reference check when merging with eda dataset
-bls.2 <- bls.1
-bls.2$bls.county <- 0
-for(i in 1:length(bls.2$bls.area)){
-        splits <- strsplit(as.character(bls.2$bls.area[i]), ",")
-        bls.2$bls.county[i] <- splits[[1]][1]
-}
-
-## convert bls factors into numerics, where appropriate
-bls.2$bls.estab <- gsub(",", "", bls.2$bls.estab)
-bls.2$bls.estab <- as.numeric(bls.2$bls.estab)
- 
-bls.2$bls.emp <- gsub(",", "", bls.2$bls.emp)
-bls.2$bls.emp <- as.numeric(bls.2$bls.emp)
-
-bls.2$bls.wages <- gsub(",", "", bls.2$bls.wages)
-bls.2$bls.wages <- as.numeric(bls.2$bls.wages)
-
-bls.national$bls.wages <- gsub(",", "", bls.national$bls.wages)
-bls.national$bls.wages <- as.numeric(bls.national$bls.wages)
-
-## merge bls with eda
-eda.1 <- merge(eda.z, bls.2, by = "fips.state.county")
-
-## convert factor columns to character to avoid coerced NA's during rbind
-eda.1$eda.County.Name <- as.character(eda.1$eda.County.Name)
-eda.1$eda.abb <- as.character(eda.1$eda.abb)
-eda.1$eda.project <- as.character(eda.1$eda.project)
-eda.1$eda.State <- as.character(eda.1$eda.State)
-
-## rbind unmatched counties beneath eda.1
-## to do this, need to sync up column names between eda.1 and bls.2
-bls.3 <- bls.2
-
-names.eda <- names(eda.1)
-names.bls <- names(bls.3)
-eda.only.names <- names.eda[which(!(names.eda %in% names.bls))]
-
-for(i in 1:length(eda.only.names)) {
-        col.number <- ncol(bls.3)
-        new.col.number <- col.number + 1
-        bls.3[ , new.col.number] <- 0
-        names(bls.3)[new.col.number] <- eda.only.names[i]
-}
-
-## test to ensure no dropped counties
-num.eda.only.counties <- length(unique(eda.1$fips.state.county))
-bls.unused <- which(!(bls.3$fips.state.county %in% eda.1$fips.state.county))
-bls.non.eda <- bls.3[bls.unused, ]
-num.bls.only.counties <- length(unique(bls.non.eda$fips.state.county))
-## these two sums should be equal if no counties were dropped
-num.bls.only.counties + num.eda.only.counties
-length(unique(bls.3$fips.state.county))
-
-eda.1 <- eda.1[ , order(names(eda.1))]
-bls.non.eda <- bls.non.eda[ , order(names(bls.non.eda))]
-
-eda.2 <- rbind(eda.1, bls.non.eda)
-
-## check to see no lost rows
-nrow(eda.2)
-nrow(eda.1) + nrow(bls.non.eda)
-
-## add empty columns for multipe grants to same county
-
-eda.3 <- eda.2
-
-eda.3$eda.grantee2 <- 0
-eda.3$eda.location2 <- 0
-eda.3$eda.funds2 <- 0
-eda.3$eda.program2 <- 0
-eda.3$eda.project2 <- 0
-
-eda.3$eda.grantee3 <- 0
-eda.3$eda.location3 <- 0
-eda.3$eda.funds3 <- 0
-eda.3$eda.program3 <- 0
-eda.3$eda.project3 <- 0
-
-multiple.grants <- function(x){
-        dups.index <- duplicated(eda.3$fips.state.county) 
-        dups <- which(dups.index == TRUE)
-        if(length(dups) > 1){
-                for(i in 1:length(dups)){
-                        dups.row <- dups[i]
-                        dups.fips <- eda.3$fips.state.county[dups.row]
-                        dups.fips.df <- eda.3[eda.3$fips.state.county == dups.fips, ]
-                        all.dups.row <- which(eda.3$fips.state.county == dups.fips)
-                        initial.dups.row <- all.dups.row[1]
-                        eda.3$eda.grantee2[initial.dups.row] <- dups.fips.df$eda.grantee[2]
-                        eda.3$eda.location2[initial.dups.row] <- dups.fips.df$eda.location[2]
-                        eda.3$eda.funds2[initial.dups.row] <- dups.fips.df$eda.funds[2]
-                        eda.3$eda.program2[initial.dups.row] <- dups.fips.df$eda.program[2]
-                        eda.3$eda.project2[initial.dups.row] <- dups.fips.df$eda.project[2]
-                        
-                        if(length(dups.fips.df$fips.state.county) > 2){
-                                eda.3$eda.grantee3[initial.dups.row] <- dups.fips.df$eda.grantee[3]
-                                eda.3$eda.location3[initial.dups.row] <- dups.fips.df$eda.location[3]
-                                eda.3$eda.funds3[initial.dups.row] <- dups.fips.df$eda.funds[3]
-                                eda.3$eda.program3[initial.dups.row] <- dups.fips.df$eda.program[3]
-                                eda.3$eda.project3[initial.dups.row] <- dups.fips.df$eda.project[3]
-                                
-                                if(length(dups.fips.df$fips.state.county) > 3){
-                                        print(dups.fips.df$fips.state.county[1])
-                                        print("has more than three grants")
-                                        ## then manually add extra grant columns, as needed
-                                }
-                        }
-                }        
-        }
-        return(eda.3)
-}
-
-eda.3 <- multiple.grants(eda.3)
-
-## check on mutliple grants
-dups.index <- duplicated(eda.3$fips.state.county) 
-dups <- which(dups.index == TRUE)
-dups
-##eda.3[ , ]
-
-## remove duplicate rows
-eda.3 <- eda.3[-dups, ]
-
-## create total funds variable
-eda.3$eda.total.funds <- eda.3$eda.funds + eda.3$eda.funds2 + eda.3$eda.funds3
-
-eda.4 <- eda.3
 ## import and clean bea data
 ## read in bea data
 
-##getwd()
-
-## if needed, set working directory to bea
 setwd("../") 
 setwd("bea")
 
@@ -488,11 +328,121 @@ names(cast.bea.2013) <- c("bea.geo.fips", "bea.location", "bea.state.fips", "bea
                           "fips.state.county", "bea.per.cap.inc", "bea.income", "bea.population")
 cast.bea.2013$bea.income <- as.numeric(cast.bea.2013$bea.income) * 1000
 
-## merge eda.4 and cast.bea.year
+## merge cast.bea.year and eda datasets
 
-cast.year <- paste("cast.bea.", year, sep = "")
-eda.4 <- merge(eda.4, get(cast.year), id.var = "fips.state.county")
-eda.5 <- eda.4
+cast.year.fetch <- paste("cast.bea.", year, sep = "")
+cast.year <- get(cast.year.fetch)
+eda.1 <- merge(eda.z, cast.year, id.var = "fips.state.county")
+
+## convert factor columns to character to avoid coerced NA's during rbind
+eda.1$eda.County.Name <- as.character(eda.1$eda.County.Name)
+eda.1$eda.abb <- as.character(eda.1$eda.abb)
+eda.1$eda.project <- as.character(eda.1$eda.project)
+eda.1$eda.State <- as.character(eda.1$eda.State)
+
+names.eda <- names(eda.1)
+names.bea <- names(cast.year)
+eda.only.names <- names.eda[which(!(names.eda %in% names.bea))]
+
+for(i in 1:length(eda.only.names)) {
+        col.number <- ncol(cast.year)
+        new.col.number <- col.number + 1
+        cast.year[ , new.col.number] <- 0
+        names(cast.year)[new.col.number] <- eda.only.names[i]
+}
+
+## test to ensure no dropped counties
+num.eda.only.counties <- length(unique(eda.1$fips.state.county))
+bea.unused <- which(!(cast.year$fips.state.county %in% eda.1$fips.state.county))
+bea.non.eda <- cast.year[bea.unused, ]
+num.bea.only.counties <- length(unique(bea.non.eda$fips.state.county))
+## these three sums should be equal if no counties were dropped
+num.bea.only.counties + num.eda.only.counties
+length(unique(cast.year$fips.state.county))
+length(cast.year$fips.state.county)
+
+eda.1 <- eda.1[ , order(names(eda.1))]
+bea.non.eda <- bea.non.eda[ , order(names(bea.non.eda))]
+
+eda.2 <- rbind(eda.1, bea.non.eda)
+
+## check to see no lost rows
+nrow(eda.2)
+nrow(eda.1) + nrow(bea.non.eda)
+
+## add empty columns for multipe grants to same county
+
+eda.3 <- eda.2
+
+eda.3$eda.grantee2 <- 0
+eda.3$eda.location2 <- 0
+eda.3$eda.funds2 <- 0
+eda.3$eda.program2 <- 0
+eda.3$eda.project2 <- 0
+
+eda.3$eda.grantee3 <- 0
+eda.3$eda.location3 <- 0
+eda.3$eda.funds3 <- 0
+eda.3$eda.program3 <- 0
+eda.3$eda.project3 <- 0
+
+multiple.grants <- function(x){
+        dups.index <- duplicated(eda.3$fips.state.county) 
+        dups <- which(dups.index == TRUE)
+        if(length(dups) > 1){
+                for(i in 1:length(dups)){
+                        dups.row <- dups[i]
+                        dups.fips <- eda.3$fips.state.county[dups.row]
+                        dups.fips.df <- eda.3[eda.3$fips.state.county == dups.fips, ]
+                        all.dups.row <- which(eda.3$fips.state.county == dups.fips)
+                        initial.dups.row <- all.dups.row[1]
+                        eda.3$eda.grantee2[initial.dups.row] <- dups.fips.df$eda.grantee[2]
+                        eda.3$eda.location2[initial.dups.row] <- dups.fips.df$eda.location[2]
+                        eda.3$eda.funds2[initial.dups.row] <- dups.fips.df$eda.funds[2]
+                        eda.3$eda.program2[initial.dups.row] <- dups.fips.df$eda.program[2]
+                        eda.3$eda.project2[initial.dups.row] <- dups.fips.df$eda.project[2]
+                        
+                        if(length(dups.fips.df$fips.state.county) > 2){
+                                eda.3$eda.grantee3[initial.dups.row] <- dups.fips.df$eda.grantee[3]
+                                eda.3$eda.location3[initial.dups.row] <- dups.fips.df$eda.location[3]
+                                eda.3$eda.funds3[initial.dups.row] <- dups.fips.df$eda.funds[3]
+                                eda.3$eda.program3[initial.dups.row] <- dups.fips.df$eda.program[3]
+                                eda.3$eda.project3[initial.dups.row] <- dups.fips.df$eda.project[3]
+                                
+                                if(length(dups.fips.df$fips.state.county) > 3){
+                                        print(dups.fips.df$fips.state.county[1])
+                                        print("has more than three grants")
+                                        ## then manually add extra grant columns, as needed
+                                }
+                        }
+                }        
+        }
+        return(eda.3)
+}
+
+eda.3 <- multiple.grants(eda.3)
+
+## check on mutliple grants
+dups.index <- duplicated(eda.3$fips.state.county) 
+dups <- which(dups.index == TRUE)
+dups
+##eda.3[ , ]
+
+## remove duplicate rows
+eda.3 <- eda.3[-dups, ]
+
+## create total funds variable
+eda.3$eda.total.funds <- eda.3$eda.funds + eda.3$eda.funds2 + eda.3$eda.funds3
+
+## create dummy variable for receiving treatment (grant) grant = 1
+eda.3$eda.grant <- 0
+for(i in 1:length(eda.3$eda.funds)){
+        if(eda.3$eda.funds[i] != 0){
+                eda.3$eda.grant[i] <- 1
+        }
+}
+
+eda.5 <- eda.3
 
 ## convert bea.population and bea.per.cap.inc from character to numeric
 eda.5$bea.population <- as.numeric(eda.5$bea.population)
@@ -640,7 +590,6 @@ eda.7$blsu.nat.ue.rate <- nat.ue$blsu.nat.ue.rate[which(nat.ue$blsu.year == year
 
 ## create dummy variable for "1pctpt.above.nat.ue"
 ## need to first add in all year data, since need 2yr avg of county ue.rate
-
 
 
 ## assign df a "df.year" name and set aside for later rbind
